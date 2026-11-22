@@ -1,0 +1,63 @@
+<main class="page">
+  <section class="hero">
+    <div class="card">
+      <span class="eyebrow">FeedDrop Live</span>
+      <h1>Random Video Chat</h1>
+      <p class="subtitle">
+        Instant 1-on-1 webcam conversations with people worldwide. No account, no downloads.
+      </p>
+
+      <fieldset>
+        <legend>I am</legend>
+        <div class="options">
+          @for (option of genders; track option.value) {
+          <label class="pill" [class.selected]="gender() === option.value">
+            <input
+              type="radio"
+              name="gender"
+              [value]="option.value"
+              [checked]="gender() === option.value"
+              (change)="gender.set(option.value)"
+            />
+            {{ option.label }}
+          </label>
+          }
+        </div>
+      </fieldset>
+
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="over21()"
+          (change)="over21.set($any($event.target).checked)"
+        />
+        <span>I confirm I am 21 or older and agree to respectful conduct</span>
+      </label>
+
+      <button class="primary start-btn" [disabled]="!canStart()" (click)="start()">
+        Start Video Chat
+      </button>
+
+      @if (chat.error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+      }
+    </div>
+  </section>
+
+  <section class="info" aria-label="About FeedDrop Random Video Chat">
+    <div class="grid">
+      <article class="feature">
+        <h2>Instant Peer-to-Peer</h2>
+        <p>Direct WebRTC audio and video streaming in your browser with one-click partner switching.</p>
+      </article>
+      <article class="feature">
+        <h2>Zero Registration</h2>
+        <p>No profiles, passwords, or personal data stored—select your option and connect in seconds.</p>
+      </article>
+      <article class="feature">
+        <h2>Full Control</h2>
+        <p>Mute your microphone, toggle your camera, or skip to the next person at any moment.</p>
+      </article>
+    </div>
+  </section>
+</main>

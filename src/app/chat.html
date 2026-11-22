@@ -1,0 +1,49 @@
+<section class="stage">
+  <video #remote class="remote" autoplay playsinline></video>
+  <video #local class="local" [class.camera-off]="!chat.cameraEnabled()" autoplay playsinline muted></video>
+
+  @if (chat.status() !== 'chatting') {
+  <div class="overlay">
+    <div class="pulse"></div>
+    <span>{{ statusText() }}</span>
+  </div>
+  } @else if (chat.partnerGender(); as gender) {
+  <div class="badge">
+    <span class="dot"></span>
+    Stranger · {{ gender }}
+  </div>
+  }
+
+  @if (chat.error(); as message) {
+  <div class="banner" role="alert">{{ message }}</div>
+  }
+
+  <div class="bar">
+    <button
+      type="button"
+      [class.muted-btn]="!chat.micEnabled()"
+      (click)="chat.toggleMic()"
+    >
+      {{ chat.micEnabled() ? 'Mute' : 'Unmute' }}
+    </button>
+
+    <button
+      type="button"
+      [class.muted-btn]="!chat.cameraEnabled()"
+      (click)="chat.toggleCamera()"
+    >
+      {{ chat.cameraEnabled() ? 'Cam Off' : 'Cam On' }}
+    </button>
+
+    <button
+      type="button"
+      class="primary"
+      [disabled]="chat.status() !== 'chatting'"
+      (click)="chat.next()"
+    >
+      Next
+    </button>
+
+    <button type="button" class="danger-btn" (click)="chat.stop()">Stop</button>
+  </div>
+</section>

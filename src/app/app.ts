@@ -6,16 +6,8 @@ import { Join } from './join';
 @Component({
   selector: 'app-root',
   imports: [Join, Chat],
-  template: `
-    @if (chat.status() === 'idle') {
-      <app-join />
-    } @else {
-      <app-chat />
-    }
-  `,
-  styles: `
-    :host { display: block; height: 100%; }
-  `,
+  templateUrl: './app.html',
+  styleUrl: './app.css',
 })
 export class App {
   protected readonly chat = inject(ChatService);

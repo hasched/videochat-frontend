@@ -17,13 +17,9 @@ interface ServerMessage {
 }
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
 };
 
-/**
- * Everything the UI needs: the signaling WebSocket, the WebRTC connection to the
- * current partner, and the camera stream. Components only read the signals.
- */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   readonly status = signal<Status>('idle');
@@ -31,29 +27,33 @@ export class ChatService {
   readonly partnerGender = signal<Gender | null>(null);
   readonly localStream = signal<MediaStream | null>(null);
   readonly remoteStream = signal<MediaStream | null>(null);
+  readonly micEnabled = signal(true);
+  readonly cameraEnabled = signal(true);
 
   private socket: WebSocket | null = null;
   private peer: RTCPeerConnection | null = null;
   private pendingCandidates: RTCIceCandidateInit[] = [];
-
-  // ---------------------------------------------------------------- public API
 
   async start(gender: Gender, over21: boolean): Promise<void> {
     this.error.set(null);
     this.status.set('connecting');
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
       this.localStream.set(stream);
+      this.micEnabled.set(true);
+      this.cameraEnabled.set(true);
     } catch {
-      this.reset('Camera and microphone access is needed (use http://localhost or https).');
+      this.reset('Camera and microphone permissions are required to start video chat.');
       return;
     }
 
     this.connect(gender, over21);
   }
 
-  /** Skip the current partner and look for someone new. */
   next(): void {
     if (this.status() !== 'chatting') {
       return;
@@ -64,12 +64,29 @@ export class ChatService {
     this.status.set('waiting');
   }
 
-  /** Stop chatting and go back to the start screen. */
   stop(): void {
     this.reset();
   }
 
-  // ----------------------------------------------------------------- signaling
+  toggleMic(): void {
+    const stream = this.localStream();
+    if (!stream) {
+      return;
+    }
+    const nextState = !this.micEnabled();
+    stream.getAudioTracks().forEach((track) => (track.enabled = nextState));
+    this.micEnabled.set(nextState);
+  }
+
+  toggleCamera(): void {
+    const stream = this.localStream();
+    if (!stream) {
+      return;
+    }
+    const nextState = !this.cameraEnabled();
+    stream.getVideoTracks().forEach((track) => (track.enabled = nextState));
+    this.cameraEnabled.set(nextState);
+  }
 
   private connect(gender: Gender, over21: boolean): void {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -79,9 +96,8 @@ export class ChatService {
     socket.onopen = () => this.send({ type: 'join', gender, over21 });
     socket.onmessage = (event) => this.onMessage(JSON.parse(event.data as string) as ServerMessage);
     socket.onclose = () => {
-      // Only treat it as an error if we did not close it ourselves.
       if (this.socket === socket) {
-        this.reset('Connection to the server was lost. Is the backend running?');
+        this.reset('Connection to the server was lost. Please try again.');
       }
     };
   }
@@ -123,8 +139,6 @@ export class ChatService {
     }
   }
 
-  // -------------------------------------------------------------------- WebRTC
-
   private async startCall(initiator: boolean): Promise<void> {
     this.closePeer();
 
@@ -139,14 +153,24 @@ export class ChatService {
         this.remoteStream.set(event.streams[0] ?? null);
       }
     };
+
     peer.onicecandidate = (event) => {
       if (event.candidate) {
         this.send({ type: 'signal', data: { candidate: event.candidate } });
       }
     };
 
+    peer.onconnectionstatechange = () => {
+      if (
+        this.peer === peer &&
+        (peer.connectionState === 'failed' || peer.connectionState === 'disconnected')
+      ) {
+        this.next();
+      }
+    };
+
     if (!initiator) {
-      return; // the other side sends the offer
+      return;
     }
 
     try {
@@ -171,7 +195,6 @@ export class ChatService {
     try {
       if (data.sdp) {
         await peer.setRemoteDescription(data.sdp);
-        // ICE candidates can arrive before the description: apply the buffered ones now.
         for (const candidate of this.pendingCandidates.splice(0)) {
           await peer.addIceCandidate(candidate);
         }
@@ -203,17 +226,19 @@ export class ChatService {
     this.remoteStream.set(null);
   }
 
-  // ------------------------------------------------------------------- cleanup
-
   private reset(error: string | null = null): void {
     const socket = this.socket;
-    this.socket = null; // so that onclose knows this was intentional
+    this.socket = null;
     socket?.close();
 
     this.closePeer();
-    this.localStream()?.getTracks().forEach((track) => track.stop());
+    this.localStream()
+      ?.getTracks()
+      .forEach((track) => track.stop());
     this.localStream.set(null);
     this.partnerGender.set(null);
+    this.micEnabled.set(true);
+    this.cameraEnabled.set(true);
     this.status.set('idle');
     this.error.set(error);
   }
